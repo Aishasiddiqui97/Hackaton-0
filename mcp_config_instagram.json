@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "instagram-playwright": {
+      "command": "python",
+      "args": [
+        "E:\\Python.py\\Hackaton 0\\AI_Employee_Vault\\mcp_servers\\instagram_mcp_server.py"
+      ],
+      "env": {
+        "INSTAGRAM_USERNAME": "${INSTAGRAM_USERNAME}",
+        "INSTAGRAM_PASSWORD": "${INSTAGRAM_PASSWORD}",
+        "DRY_RUN": "true",
+        "VAULT_PATH": "E:\\Python.py\\Hackaton 0\\AI_Employee_Vault"
+      }
+    }
+  }
+}

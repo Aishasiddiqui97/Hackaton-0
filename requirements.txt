@@ -26,6 +26,12 @@ pandas==2.2.0
 pathlib==1.0.1
 certifi==2026.2.25
 
+# AI - Google Gemini (NEW API)
+google-genai>=0.2.0
+
 # Optional: Advanced Features
 # anthropic==0.18.0  # For AI-generated content
-# schedule==1.2.0    # For advanced scheduling
+schedule==1.2.0    # For advanced scheduling (used by WhatsApp agent loop)
+
+# WhatsApp Agent (watchdog already used by watcher.py)
+watchdog==3.0.0

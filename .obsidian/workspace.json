@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "GOLD_TIER_COMPLETE.md",
+                "file": "02_Pending_Approvals/reply-gmail-.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "GOLD_TIER_COMPLETE"
+              "title": "reply-gmail-"
             }
           }
         ]
@@ -180,24 +180,50 @@
       "bases:Create new base": false
     }
   },
-  "active": "cfe76034c542cba1",
+  "active": "9f6840efa5d050f6",
   "lastOpenFiles": [
-    "Done/production_pipeline_test.md",
-    "logs/System_Log.md",
-    "Inbox/task.md",
+    "AI_Employee_Vault/Done/[APPROVED]-reply-gmail-726cff78.md",
+    "02_Pending_Approvals/reply-gmail-726cff78.md",
+    "AI_Employee_Vault/Inbox/gmail-726cff78.md",
+    "AI_Employee_Vault/Done/[APPROVED]-reply-gmail-3566841b.md",
+    "02_Pending_Approvals/reply-gmail-3566841b.md",
+    "AI_Employee_Vault/Inbox/gmail-3566841b.md",
+    "AI_Employee_Vault/Done/gmail-b7de320e.md",
+    "AI_Employee_Vault/Plans/20260301-231547-Plan.md",
+    "AI_Employee_Vault/Done/gmail-4571c86d.md",
+    "AI_Employee_Vault/Plans/20260301-231546-Plan.md",
+    "AI_Employee_Vault/Done/gmail-1fa94478.md",
+    "AI_Employee_Vault/Plans/20260301-231545-Plan.md",
+    "AI_Employee_Vault/Done/[APPROVED]-reply-gmail-4571c86d.md",
+    "02_Pending_Approvals/reply-gmail-4571c86d.md",
+    "AI_Employee_Vault/Inbox/gmail-4571c86d.md",
+    "AI_Employee_Vault/Done/[APPROVED]-reply-gmail-b7de320e.md",
+    "02_Pending_Approvals/reply-gmail-b7de320e.md",
+    "AI_Employee_Vault/Inbox/gmail-b7de320e.md",
+    "AI_Employee_Vault/Done/[APPROVED]-reply-gmail-1fa94478.md",
+    "02_Pending_Approvals/reply-gmail-1fa94478.md",
+    "AI_Employee_Vault/Inbox/gmail-1fa94478.md",
+    "GOLD_TIER_COMPLETE.md",
+    "02_Pending_Approvals/reply-gmail-.md",
+    "AI_Employee_Vault/Needs_Action/20260301-230135-Plan.md",
+    "AI_Employee_Vault/Done/gmail-ff7c72ac.md",
+    "AI_Employee_Vault/Plans/20260301-230134-Plan.md",
+    "logs/system.log",
+    "venv/Lib/site-packages/flask-3.1.3.dist-info/licenses/LICENSE.txt",
+    "venv/Lib/site-packages/flask-3.1.3.dist-info/WHEEL",
+    "venv/Lib/site-packages/flask-3.1.3.dist-info/licenses",
+    "venv/Lib/site-packages/flask-3.1.3.dist-info/REQUESTED",
+    "venv/Lib/site-packages/flask-3.1.3.dist-info/METADATA",
+    "venv/Lib/site-packages/flask-3.1.3.dist-info/RECORD",
+    "venv/Lib/site-packages/flask-3.1.3.dist-info/INSTALLER",
+    "venv/Lib/site-packages/flask-3.1.3.dist-info/entry_points.txt",
+    "venv/Lib/site-packages/flask-3.1.3.dist-info",
+    "venv/Lib/site-packages/werkzeug/debug/shared/more.png",
+    "venv/Lib/site-packages/werkzeug/debug/shared/less.png",
+    "venv/Lib/site-packages/werkzeug/debug/shared/console.png",
     "Untitled 3.canvas",
-    "2026-02-17.md",
-    "Untitled 2.base",
-    "PROJECT_STATUS_REPORT.md",
-    "Untitled 1.base",
     "Untitled 2.canvas",
-    "AI_Employee_Vault/Done/weekly_summary.md",
-    "AI_Employee_Vault/Done/update_dashboard.md",
-    "AI_Employee_Vault/Done/Email_20260212_223930_Discover opportunities to grow your career.md",
-    "AI_Employee_Vault/Done/create_weekly_summary.md",
-    "AI_Employee_Vault/Done/autonomous_test.md",
     "Untitled 1.canvas",
-    "2026-02-16.md",
     "Untitled.canvas"
   ]
 }

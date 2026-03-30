@@ -1,0 +1,21 @@
+{
+  "name": "twitter-mcp-server",
+  "version": "1.0.0",
+  "description": "Twitter/X MCP Server for Gold Tier Digital FTE",
+  "main": "mcp_servers/twitter_mcp.js",
+  "scripts": {
+    "start:twitter": "node mcp_servers/twitter_mcp.js",
+    "test:twitter": "python test_twitter_integration.py"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "express": "^4.22.1",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "speakeasy": "^2.0.0",
+    "twitter-api-v2": "^1.29.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.2"
+  }
+}

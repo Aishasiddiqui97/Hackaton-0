@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database
   postgres:
     image: postgres:15
     container_name: odoo_postgres
@@ -11,6 +12,8 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - odoo-db-data:/var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
     networks:
       - odoo-network
     restart: unless-stopped
@@ -20,26 +23,38 @@ services:
       timeout: 5s
       retries: 5
 
+  # Odoo Application
   odoo:
     image: odoo:17.0
     container_name: odoo_app
     depends_on:
       postgres:
         condition: service_healthy
+    environment:
+      - HOST=postgres
+      - USER=odoo
+      - PASSWORD=odoo_db_password
+      - PORT=5432
     ports:
       - "8069:8069"
-    environment:
-      HOST: postgres
-      USER: odoo
-      PASSWORD: odoo_db_password
     volumes:
       - odoo-web-data:/var/lib/odoo
-      - ./config:/etc/odoo
-      - ./addons:/mnt/extra-addons
+      - ./odoo-config:/etc/odoo
+      - ./odoo-addons:/mnt/extra-addons
     networks:
       - odoo-network
     restart: unless-stopped
-    command: ["odoo", "-c", "/etc/odoo/odoo.conf"]
+    command: >
+      bash -c "
+      odoo --database=odoo --db_host=postgres --db_port=5432 --db_user=odoo --db_password=odoo_db_password --init=base --without-demo=all --stop-after-init &&
+      odoo --database=odoo --db_host=postgres --db_port=5432 --db_user=odoo --db_password=odoo_db_password
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8069/web/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
 volumes:
   odoo-web-data:

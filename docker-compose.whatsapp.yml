@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  whatsapp-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.whatsapp
+    container_name: whatsapp_autonomous_agent
+    restart: unless-stopped
+
+    # Security options for --no-sandbox
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
+
+    # Shared memory size (important for Chrome)
+    shm_size: 2gb
+
+    # Environment variables
+    environment:
+      - DISPLAY=:99
+      - PYTHONUNBUFFERED=1
+      - CHECK_INTERVAL=15
+
+    # Volumes for persistent session
+    volumes:
+      - ./whatsapp_session:/app/whatsapp_session
+      - ./logs:/app/logs
+      - ./00_Inbox:/app/00_Inbox
+      - ./Needs_Action:/app/Needs_Action
+      - ./03_Posted:/app/03_Posted
+
+    # Network mode
+    network_mode: bridge
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: VNC server for debugging (headful mode)
+  whatsapp-agent-vnc:
+    build:
+      context: .
+      dockerfile: Dockerfile.whatsapp
+    container_name: whatsapp_agent_vnc
+    restart: unless-stopped
+    profiles:
+      - debug
+
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
+
+    shm_size: 2gb
+
+    environment:
+      - DISPLAY=:99
+      - PYTHONUNBUFFERED=1
+
+    volumes:
+      - ./whatsapp_session:/app/whatsapp_session
+      - ./logs:/app/logs
+
+    ports:
+      - "5900:5900"  # VNC port
+
+    command: >
+      bash -c "
+        apt-get update && apt-get install -y x11vnc xvfb &&
+        Xvfb :99 -screen 0 1280x900x24 &
+        x11vnc -display :99 -forever -nopw -listen 0.0.0.0 -xkb &
+        sleep 5 &&
+        python autonomous_whatsapp_agent.py
+      "

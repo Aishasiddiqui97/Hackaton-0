@@ -5,6 +5,7 @@ Ralph Wiggum Loop Pattern - Always-On Autonomous Operation
 """
 
 import os
+import shutil
 import time
 import json
 from datetime import datetime, timedelta
@@ -276,7 +277,9 @@ What principles guide your business decisions?
                     # Mark as posted
                     new_filename = f"POSTED_{filename}"
                     new_filepath = os.path.join(posted_folder, new_filename)
-                    os.rename(filepath, new_filepath)
+                    if os.path.exists(new_filepath):
+                        os.remove(new_filepath)
+                    shutil.move(filepath, new_filepath)
                     
                     # Update last post time
                     self.last_posts[platform] = datetime.now().isoformat()
