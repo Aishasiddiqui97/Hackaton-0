@@ -2,6 +2,7 @@
 """
 Twitter/X Browser Automation MCP Server - Gold Tier
 Autonomous browser-based Twitter posting with retry logic
+Uses real Chrome profile - NO AUTO-LOGIN
 """
 
 import json
@@ -9,10 +10,16 @@ import logging
 import sys
 import os
 import time
+import random
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 from playwright.sync_api import sync_playwright, Page, Browser, TimeoutError as PlaywrightTimeout
+
+# Add vault to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "AI_Employee_Vault" / "twitter"))
+from session_manager import TwitterSessionManager
 
 # Logging setup
 LOG_PATH = Path("logs/twitter_browser_actions.log")
@@ -33,35 +40,79 @@ VAULT_PATH = Path("AI_Employee_Vault")
 LOGS_PATH = VAULT_PATH / "Logs"
 PLANS_PATH = VAULT_PATH / "Plans"
 
+# Chrome profile
+CHROME_USER_DATA = os.getenv("CHROME_USER_DATA_DIR", r"C:\Users\hp\AppData\Local\Google\Chrome\User Data")
+CHROME_PROFILE = os.getenv("CHROME_PROFILE", "Default")
+
 
 class TwitterBrowserAgent:
-    """Browser automation agent for Twitter/X posting."""
+    """Browser automation agent for Twitter/X posting using real Chrome profile."""
 
-    def __init__(self, email: str, password: str):
-        self.email = email
-        self.password = password
-        self.browser: Optional[Browser] = None
+    def __init__(self):
+        self.context = None
         self.page: Optional[Page] = None
         self.playwright = None
         self.tweet_url = None
+        self.session_manager = TwitterSessionManager()
+
+    def _random_delay(self, min_ms: int = 8000, max_ms: int = 15000):
+        """Random human-like delay"""
+        delay = random.randint(min_ms, max_ms) / 1000
+        time.sleep(delay)
+
+    def _random_mouse_move(self):
+        """Random mouse movements"""
+        try:
+            x = random.randint(100, 500)
+            y = random.randint(100, 500)
+            self.page.mouse.move(x, y)
+            time.sleep(random.uniform(0.1, 0.3))
+        except:
+            pass
 
     def start_browser(self) -> bool:
-        """Initialize browser session."""
+        """Initialize browser session with real Chrome profile."""
         try:
-            logger.info("TWITTER_BROWSER_START - Initializing Playwright")
+            logger.info("TWITTER_BROWSER_START - Initializing Playwright with Chrome profile")
 
             self.playwright = sync_playwright().start()
-            self.browser = self.playwright.chromium.launch(
-                headless=False,  # Set to True for production
-                args=['--start-maximized']
+
+            profile_path = os.path.join(CHROME_USER_DATA, CHROME_PROFILE)
+            logger.info(f"TWITTER_BROWSER - Using profile: {profile_path}")
+
+            # Launch persistent context with real Chrome profile
+            self.context = self.playwright.chromium.launch_persistent_context(
+                user_data_dir=profile_path,
+                headless=False,
+                channel="chrome",
+                args=[
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-infobars',
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--start-maximized',
+                    '--ignore-certificate-errors',
+                    '--password-store=basic'
+                ],
+                no_viewport=True
             )
 
-            context = self.browser.new_context(
-                viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            )
+            # Add stealth JavaScript
+            self.context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
 
-            self.page = context.new_page()
+                window.chrome = {
+                    runtime: {}
+                };
+
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5]
+                });
+            """)
+
+            self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
 
             logger.info("TWITTER_BROWSER_SUCCESS - Browser initialized")
             return True
@@ -70,61 +121,24 @@ class TwitterBrowserAgent:
             logger.error(f"TWITTER_BROWSER_ERROR - Failed to start browser: {str(e)}")
             return False
 
-    def login(self, max_retries: int = 3) -> bool:
-        """Login to Twitter/X account with retry logic."""
-        for attempt in range(1, max_retries + 1):
-            try:
-                logger.info(f"TWITTER_LOGIN_ATTEMPT - Attempt {attempt}/{max_retries}")
+    def check_login(self) -> bool:
+        """Check if already logged in using session manager."""
+        try:
+            logger.info("TWITTER_LOGIN_CHECK - Verifying login status")
 
-                # Navigate to login page
-                self.page.goto("https://x.com/login", wait_until="networkidle", timeout=30000)
-                time.sleep(2)
+            # Use session manager to check login
+            is_logged_in = self.session_manager.check_login_status(self.page)
 
-                # Enter email/username
-                logger.info("TWITTER_LOGIN - Entering email")
-                email_input = self.page.wait_for_selector('input[autocomplete="username"]', timeout=10000)
-                email_input.fill(self.email)
-                time.sleep(1)
+            if is_logged_in:
+                logger.info("TWITTER_LOGIN_SUCCESS - Already logged in")
+                return True
+            else:
+                logger.error("TWITTER_LOGIN_FAILED - Not logged in")
+                return False
 
-                # Click Next
-                next_button = self.page.locator('text="Next"').first
-                next_button.click()
-                time.sleep(2)
-
-                # Enter password
-                logger.info("TWITTER_LOGIN - Entering password")
-                password_input = self.page.wait_for_selector('input[name="password"]', timeout=10000)
-                password_input.fill(self.password)
-                time.sleep(1)
-
-                # Click Login
-                login_button = self.page.locator('text="Log in"').first
-                login_button.click()
-
-                # Wait for home timeline
-                logger.info("TWITTER_LOGIN - Waiting for home timeline")
-                self.page.wait_for_url("https://x.com/home", timeout=15000)
-                time.sleep(3)
-
-                # Verify login success
-                if "home" in self.page.url:
-                    logger.info("TWITTER_LOGIN_SUCCESS - Logged in successfully")
-                    return True
-
-            except PlaywrightTimeout as e:
-                logger.error(f"TWITTER_LOGIN_TIMEOUT - Attempt {attempt}: {str(e)}")
-                if attempt < max_retries:
-                    time.sleep(10)
-                    continue
-
-            except Exception as e:
-                logger.error(f"TWITTER_LOGIN_ERROR - Attempt {attempt}: {str(e)}")
-                if attempt < max_retries:
-                    time.sleep(10)
-                    continue
-
-        logger.error("TWITTER_LOGIN_FAILED - All login attempts failed")
-        return False
+        except Exception as e:
+            logger.error(f"TWITTER_LOGIN_ERROR - {str(e)}")
+            return False
 
     def generate_tweet(self) -> str:
         """Generate AI-focused tweet content."""
@@ -140,49 +154,138 @@ class TwitterBrowserAgent:
             "We built a Digital FTE that monitors emails, posts on social media, manages accounting, and generates executive reports. All autonomous. All logged. All with human oversight. This is the future. #AI #Automation #GoldTier"
         ]
 
-        import random
         tweet = random.choice(tweets)
 
-        # Ensure under 280 characters
-        if len(tweet) > 280:
-            tweet = tweet[:277] + "..."
+        # Ensure under 275 characters (keeping safe margin for spaces/emojis)
+        if len(tweet) > 275:
+            tweet = tweet[:272] + "..."
 
         logger.info(f"TWITTER_GENERATE - Tweet: {tweet[:50]}...")
         return tweet
 
-    def post_tweet(self, content: str, max_retries: int = 3) -> bool:
-        """Post tweet with retry logic."""
+    def post_tweet(self, content: str, max_retries: int = 3, dry_run: bool = False) -> bool:
+        """Post tweet with retry logic and anti-detection measures."""
         for attempt in range(1, max_retries + 1):
             try:
                 logger.info(f"TWITTER_POST_ATTEMPT - Attempt {attempt}/{max_retries}")
+                # Step 4: Use Home-page Modal for posting
+                logger.info("TWITTER_POST - Ensuring we're on home page")
+                if "home" not in self.page.url.lower():
+                    self.page.goto("https://twitter.com/home", wait_until="load", timeout=60000)
+                
+                time.sleep(3)
+                
+                # --- Overlay Handling ---
+                try:
+                    self.page.evaluate("() => { document.querySelectorAll('[data-testid=\"twc-cc-mask\"], .css-175oi2r.r-1pi2tsx').forEach(m => m.style.display = 'none'); }")
+                except: pass
 
-                # Click "Post" button to open composer
-                logger.info("TWITTER_POST - Opening tweet composer")
-                post_button = self.page.locator('[data-testid="SideNav_NewTweet_Button"]').first
-                post_button.click()
+                # Open Modal
+                logger.info("TWITTER_POST - Opening modal composer")
+                try:
+                    sidebar_btn = self.page.locator('[data-testid="SideNav_NewTweet_Button"]:visible').first
+                    sidebar_btn.click()
+                except:
+                    self.page.keyboard.press("n")
+
                 time.sleep(2)
 
-                # Enter tweet text
-                logger.info("TWITTER_POST - Entering tweet content")
-                tweet_input = self.page.locator('[data-testid="tweetTextarea_0"]').first
-                tweet_input.fill(content)
-                time.sleep(2)
+                # TARGET TEXTAREA
+                logger.info("TWITTER_POST - Filling tweet content in modal")
+                tweet_input = self.page.locator('div[data-testid="tweetTextarea_0"]:visible, div[role="textbox"]:visible').first
+                tweet_input.wait_for(state="visible", timeout=30000)
+                
+                # --- FORCE FOCUS ---
+                tweet_input.scroll_into_view_if_needed()
+                tweet_input.click()
+                time.sleep(0.5)
+                tweet_input.fill("")
+                time.sleep(0.5)
+                
+                # Human-like interaction
+                timestamp_str = datetime.now().strftime("%H:%M:%S")
+                full_content = f"[{timestamp_str}] {content}"
+                
+                for char in full_content:
+                    self.page.keyboard.type(char, delay=random.randint(10, 30))
+                
+                time.sleep(0.8)
+                self.page.keyboard.press("Space")
+                self.page.keyboard.press("Backspace")
+                time.sleep(1)
 
-                # Click Post button
-                logger.info("TWITTER_POST - Publishing tweet")
-                publish_button = self.page.locator('[data-testid="tweetButtonInline"]').first
-                publish_button.click()
+                if dry_run:
+                    logger.info("TWITTER_POST - DRY RUN MODE - Not actually posting")
+                    self.tweet_url = "DRY_RUN_MODE"
+                    return True
+
+                # Wait for button
+                publish_selector = '[data-testid="tweetButton"]:visible:not([aria-disabled="true"])'
+                
+                posted = False
+                try:
+                    self.page.wait_for_selector(publish_selector, timeout=30000)
+                    logger.info("TWITTER_POST - Post button is now enabled!")
+                    
+                    # Click Post
+                    button = self.page.locator('[data-testid="tweetButton"]:visible').first
+                    box = button.bounding_box()
+                    if box:
+                        self.page.mouse.click(box["x"] + box["width"]/2, box["y"] + box["height"]/2)
+                    else:
+                        button.click()
+                        
+                    # Verify closure
+                    self.page.wait_for_selector('div[data-testid="tweetTextarea_0"]', state="detached", timeout=12000)
+                    logger.info("TWITTER_POST_SUCCESS - Tweet posted and modal closed")
+                    posted = True
+                except:
+                    logger.warning("TWITTER_POST - Modal still visible, re-focusing and trying keyboard fallback (Control+Enter)")
+                    
+                    # --- CRITICAL RE-FOCUS ---
+                    try:
+                        box = tweet_input.bounding_box()
+                        if box:
+                            self.page.mouse.click(box["x"] + box["width"]/2, box["y"] + box["height"]/4)
+                    except:
+                        tweet_input.focus()
+
+                    time.sleep(0.5)
+                    self.page.keyboard.press("Control+Enter")
+                    try:
+                        self.page.wait_for_selector('div[data-testid="tweetTextarea_0"]', state="detached", timeout=12000)
+                        logger.info("TWITTER_POST_SUCCESS - Tweet posted via keyboard fallback")
+                        posted = True
+                    except:
+                        logger.error("TWITTER_POST_FAILED - Still visible even after keyboard fallback")
+                        posted = False
+
+                # 🔥 FINAL STATUS OUTPUT
+                print("\n" + "="*70)
+                if posted:
+                    print("✅ FULLY POSTED")
+                else:
+                    print("❌ POSTING FAILED")
+                print("="*70)
+
+                if not posted:
+                    continue
 
                 # Wait for tweet to be posted
-                time.sleep(5)
+                self._random_delay(8000, 12000)
 
                 # Capture tweet URL from timeline
                 logger.info("TWITTER_POST - Capturing tweet URL")
 
                 # Navigate to profile to find latest tweet
                 profile_link = self.page.locator('[data-testid="AppTabBar_Profile_Link"]').first
+
+                # Random mouse movement
+                self._random_mouse_move()
+                time.sleep(random.uniform(1.5, 3.0))
+
                 profile_link.click()
-                time.sleep(3)
+                self._random_delay(5000, 8000)
 
                 # Get first tweet link
                 tweet_links = self.page.locator('article a[href*="/status/"]').all()
@@ -240,37 +343,11 @@ class TwitterBrowserAgent:
             logger.error(f"TWITTER_LOG_ERROR - {str(e)}")
             return False
 
-    def logout(self) -> bool:
-        """Logout from Twitter/X."""
-        try:
-            logger.info("TWITTER_LOGOUT - Logging out")
-
-            # Click profile menu
-            self.page.locator('[data-testid="AppTabBar_Profile_Link"]').first.click()
-            time.sleep(1)
-
-            # Click logout
-            self.page.locator('text="Log out"').first.click()
-            time.sleep(1)
-
-            # Confirm logout
-            self.page.locator('[data-testid="confirmationSheetConfirm"]').first.click()
-            time.sleep(2)
-
-            logger.info("TWITTER_LOGOUT_SUCCESS - Logged out")
-            return True
-
-        except Exception as e:
-            logger.error(f"TWITTER_LOGOUT_ERROR - {str(e)}")
-            return False
-
     def close_browser(self):
         """Close browser session."""
         try:
-            if self.page:
-                self.page.close()
-            if self.browser:
-                self.browser.close()
+            if self.context:
+                self.context.close()
             if self.playwright:
                 self.playwright.stop()
 
@@ -283,47 +360,45 @@ class TwitterBrowserAgent:
 class TwitterMCPServer:
     """MCP Server for Twitter browser automation."""
 
-    def __init__(self, email: str, password: str):
-        self.email = email
-        self.password = password
+    def __init__(self):
+        pass
 
-    def autonomous_post(self) -> Dict[str, Any]:
+    def autonomous_post(self, dry_run: bool = False) -> Dict[str, Any]:
         """
-        Autonomous tweet posting with Ralph Wiggum loop.
+        Autonomous tweet posting using real Chrome profile.
         Retries until successful or max attempts reached.
         """
-        agent = TwitterBrowserAgent(self.email, self.password)
+        agent = TwitterBrowserAgent()
         max_attempts = 3
 
         for attempt in range(1, max_attempts + 1):
             try:
                 logger.info(f"TWITTER_AUTONOMOUS - Attempt {attempt}/{max_attempts}")
 
-                # Step 1: Start browser
+                # Step 1: Start browser with Chrome profile
                 if not agent.start_browser():
                     continue
 
-                # Step 2: Login
-                if not agent.login():
+                # Step 2: Check login (no auto-login)
+                if not agent.check_login():
                     agent.close_browser()
-                    continue
+                    return {
+                        "success": False,
+                        "error": "Not logged in. Please log in to Twitter/X manually in Chrome first."
+                    }
 
                 # Step 3: Generate tweet
                 tweet_content = agent.generate_tweet()
 
                 # Step 4: Post tweet
-                if not agent.post_tweet(tweet_content):
-                    agent.logout()
+                if not agent.post_tweet(tweet_content, dry_run=dry_run):
                     agent.close_browser()
                     continue
 
                 # Step 5: Save log
-                agent.save_log(tweet_content, "Posted")
+                agent.save_log(tweet_content, "Posted" if not dry_run else "DRY_RUN")
 
-                # Step 6: Logout
-                agent.logout()
-
-                # Step 7: Close browser
+                # Step 6: Close browser (no logout - keep session)
                 agent.close_browser()
 
                 logger.info("TWITTER_AUTONOMOUS_SUCCESS - Complete workflow executed")
@@ -332,7 +407,7 @@ class TwitterMCPServer:
                     "success": True,
                     "tweet_content": tweet_content,
                     "tweet_url": agent.tweet_url,
-                    "message": "Tweet posted successfully"
+                    "message": "Tweet posted successfully" if not dry_run else "DRY RUN - Tweet not actually posted"
                 }
 
             except Exception as e:
@@ -352,22 +427,13 @@ class TwitterMCPServer:
 def handle_mcp_request(request: Dict[str, Any]) -> Dict[str, Any]:
     """Handle incoming MCP requests."""
 
-    # Get credentials from environment or request
-    email = os.getenv('TWITTER_EMAIL', request.get('email'))
-    password = os.getenv('TWITTER_PASSWORD', request.get('password'))
-
-    if not email or not password:
-        return {
-            "success": False,
-            "error": "Twitter credentials not provided"
-        }
-
-    server = TwitterMCPServer(email, password)
+    server = TwitterMCPServer()
 
     action = request.get('action')
+    dry_run = request.get('dry_run', False)
 
     if action == 'autonomous_post':
-        return server.autonomous_post()
+        return server.autonomous_post(dry_run=dry_run)
 
     else:
         return {"success": False, "error": f"Unknown action: {action}"}

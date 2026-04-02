@@ -86,3 +86,6 @@ node_modules/
 test_*.png
 error_*.png
 login_*.png
+
+whatsapp_session/
+twitter_session*/

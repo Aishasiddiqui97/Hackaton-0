@@ -1,30 +1,35 @@
 #!/usr/bin/env python3
 """
-X (Twitter) Autonomous Browser Agent
+X (Twitter) Autonomous Browser Agent - Chrome Profile Edition
 Author: Antigravity Digital FTE
-Reliable browser automation for X (Twitter) posting.
+Reliable browser automation for X (Twitter) posting using real Chrome profile.
+NO AUTO-LOGIN - Uses existing Chrome session.
 """
 
 import os
+import sys
 import time
-import datetime
 import random
+import urllib.parse
+from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
+# Add vault to path for imports
+sys.path.insert(0, str(Path(__file__).parent / "AI_Employee_Vault" / "twitter"))
+from session_manager import TwitterSessionManager
+
 # Configuration
-VAULT_PATH = Path(r"e:\Python.py\Hackaton 0\AI_Employee_Vault")
+VAULT_PATH = Path(__file__).parent / "AI_Employee_Vault"
 LOG_FILE = VAULT_PATH / "Logs" / "Twitter_Log.md"
-WINDOW_SIZE = {'width': 1280, 'height': 800}
-# Move session dir to avoid spaces in path which can cause launch instability
-USER_DATA_DIR = Path("e:/Python.py/twitter_session") 
+WINDOW_SIZE = {'width': 1366, 'height': 768}
 
 # Load Environment Variables
 load_dotenv()
-TWITTER_EMAIL = os.getenv('TWITTER_EMAIL')
-TWITTER_PASSWORD = os.getenv('TWITTER_PASSWORD')
-TWITTER_USERNAME = os.getenv('TWITTER_USERNAME')
+CHROME_USER_DATA = os.getenv("CHROME_USER_DATA_DIR", r"C:\Users\hp\AppData\Local\Google\Chrome\User Data")
+CHROME_PROFILE = os.getenv("CHROME_PROFILE", "Default")
+TWITTER_USERNAME = os.getenv('TWITTER_USERNAME', '')
 
 class TwitterAutonomousAgent:
     def __init__(self, headless=False):
@@ -32,252 +37,87 @@ class TwitterAutonomousAgent:
         self.playwright = None
         self.context = None
         self.page = None
+        self.session_manager = TwitterSessionManager()
+        self.user_data_dir = os.path.join(CHROME_USER_DATA, CHROME_PROFILE)
+
+    def _random_delay(self, min_ms: int = 8000, max_ms: int = 15000):
+        """Random human-like delay"""
+        delay = random.randint(min_ms, max_ms) / 1000
+        time.sleep(delay)
+
+    def _random_mouse_move(self):
+        """Random mouse movements"""
+        try:
+            x = random.randint(100, 500)
+            y = random.randint(100, 500)
+            self.page.mouse.move(x, y)
+            time.sleep(random.uniform(0.1, 0.3))
+        except:
+            pass
 
     def start_browser(self):
-        """Step 1: Open browser with persistent profile & Set zoom"""
-        print(f"🚀 Starting browser with profile: {USER_DATA_DIR}")
-        
-        # Ensure directory exists
-        USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
-            
-        USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        
-        max_retries = 2
-        for attempt in range(max_retries):
-            try:
-                # Full cleanup of previous objects if retrying
-                if self.context: 
-                    try: self.context.close()
-                    except: pass
-                if self.playwright: 
-                    try: self.playwright.stop()
-                    except: pass
-                
-                self.playwright = sync_playwright().start()
-                
-                self.context = self.playwright.chromium.launch_persistent_context(
-                    user_data_dir=str(USER_DATA_DIR),
-                    headless=self.headless,
-                    viewport=WINDOW_SIZE,
-                    user_agent=USER_AGENT,
-                    ignore_https_errors=True,
-                    args=[
-                        "--disable-blink-features=AutomationControlled",
-                        "--no-sandbox",
-                        "--disable-dev-shm-usage"
-                    ]
-                )
-                self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
-                break
-            except Exception as e:
-                print(f"⚠️ Browser launch attempt {attempt + 1} failed: {e}")
-                if "exitCode=21" in str(e) or attempt < max_retries - 1:
-                    print("♻️ Recreating session directory...")
-                    import shutil
-                    try:
-                        shutil.rmtree(USER_DATA_DIR, ignore_errors=True)
-                        USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
-                    except: pass
-                
-                if attempt == max_retries - 1:
-                    print("❌ Could not stabilize browser launch.")
-                    return False
+        """Step 1: Open browser with real Chrome profile"""
+        print(f"🚀 Starting browser with Chrome profile: {self.user_data_dir}")
 
-        # Advanced Stealth: Hide webdriver and spoof fingerprints
-        self.page.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            window.chrome = { runtime: {} };
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-            Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
-            Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
-            Object.defineProperty(window, 'devicePixelRatio', { get: () => 1 });
-            Object.defineProperty(window, 'outerWidth', { get: () => window.innerWidth });
-            Object.defineProperty(window, 'outerHeight', { get: () => window.innerHeight });
-        """)
-        
-        print("🔍 Resetting zoom (CTRL + 0)...")
         try:
-            self.page.goto("https://x.com", wait_until="domcontentloaded", timeout=60000)
-            self.page.keyboard.press("Control+0")
-            time.sleep(1)
-        except Exception:
-            pass
-        return True
+            self.playwright = sync_playwright().start()
 
-    def is_logged_in(self):
-        """Check if we are already logged in via saved session"""
-        try:
-            print("🔄 Checking if already logged in...")
-            self.page.goto("https://x.com/home", wait_until="domcontentloaded", timeout=60000)
-            # Wait for home timeline
-            self.page.wait_for_selector('div[data-testid="primaryColumn"]', timeout=30000)
-            return "home" in self.page.url
-        except:
+            self.context = self.playwright.chromium.launch_persistent_context(
+                user_data_dir=self.user_data_dir,
+                headless=False,
+                channel="chrome",
+                args=[
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-infobars',
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--start-maximized',
+                    '--ignore-certificate-errors',
+                    '--password-store=basic'
+                ],
+                no_viewport=True
+            )
+
+            # Advanced Stealth
+            self.context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                window.chrome = { runtime: {} };
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            """)
+
+            self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
+
+            print("✅ Browser started successfully")
+            return True
+
+        except Exception as e:
+            print(f"❌ Browser launch failed: {e}")
             return False
 
-    def click_safe(self, selectors, name="button"):
-        """Wait for and click one of the selectors"""
-        for selector in selectors:
-            try:
-                if self.page.is_visible(selector, timeout=5000):
-                    print(f"    - Clicking {name} ({selector})...")
-                    self.page.click(selector, timeout=10000)
-                    return True
-            except:
-                continue
-        return False
+    def is_logged_in(self):
+        """Check if already logged in using session manager"""
+        try:
+            print("🔄 Checking login status...")
+            return self.session_manager.check_login_status(self.page)
+        except Exception as e:
+            print(f"❌ Login check failed: {e}")
+            return False
 
-    def login(self):
-        """Step 2: Login to X (Only if needed)"""
+    def check_login(self):
+        """Step 2: Check if logged in (NO AUTO-LOGIN)"""
         if self.is_logged_in():
-            print("✅ Session active! Bypassing login.")
+            print("✅ Already logged in!")
             return True
-            
-        print(f"🔐 Attempting autonomous login for {TWITTER_EMAIL}...")
-        
-        for attempt in range(3):  # Up to 3 retries
-            try:
-                print(f"  - Login Attempt {attempt + 1}/3...")
-                
-                # 1. Open homepage first as requested
-                print("  - Step 1: Opening homepage...")
-                self.page.goto("https://x.com", wait_until="domcontentloaded", timeout=90000)
-                self.page.wait_for_timeout(7000) # Wait for organic load
-                
-                # 2. Click the Sign in button
-                print("  - Step 2: Clicking Sign in button...")
-                login_selectors = [
-                    'a[href="/login"]',
-                    'div[role="button"]:has-text("Sign in")',
-                    'span:has-text("Sign in")'
-                ]
-                
-                clicked = False
-                for sel in login_selectors:
-                    if self.page.is_visible(sel, timeout=5000):
-                        print(f"    - Found sign in button: {sel}")
-                        self.page.click(sel)
-                        clicked = True
-                        break
-                
-                if not clicked:
-                    print("    - Button not found, checking if already on login page...")
-                sign_in_selectors = ['a[href="/login"]', 'div[role="button"]:has-text("Sign in")', 'a:has-text("Sign in")']
-                
-                # Ensure we are on login if homepage click fails or modal doesn't open
-                self.click_safe(sign_in_selectors, "Sign in button")
-                self.page.wait_for_timeout(3000)
-                
-                # RECOVERY SUB-LOOP (Internal retries for email/password flow)
-                for sub_attempt in range(2):
-                    print(f"  - Login Flow Attempt {sub_attempt + 1}...")
-                    
-                    # 3. Enter email
-                    print("    - Entering email...")
-                    email_selector = 'input[name="text"]'
-                    try:
-                        self.page.wait_for_selector(email_selector, timeout=20000)
-                        self.page.click(email_selector)
-                        self.page.wait_for_timeout(random.randint(500, 1500))
-                        
-                        # Ultra-stealth typing
-                        for char in TWITTER_EMAIL:
-                            self.page.keyboard.type(char)
-                            time.sleep(random.uniform(0.1, 0.4))
-                        
-                        self.page.keyboard.press("Tab") # Blur to trigger validation
-                        self.page.wait_for_timeout(2000)
-                        
-                        # Check if "Next" button is clickable
-                        next_btn = self.page.locator('div[role="button"]:has-text("Next")')
-                        if next_btn.count() > 0:
-                            print("    - Clicking Next button...")
-                            next_btn.click()
-                        else:
-                            print("    - Submitting via Enter...")
-                            self.page.keyboard.press("Enter")
-                            
-                        self.page.wait_for_timeout(5000) # Give more time for transition
-                    except Exception as e:
-                        print(f"    - ⚠️ Email step failed: {e}. Reloading flow...")
-                        self.page.goto("https://x.com/i/flow/login", wait_until="domcontentloaded")
-                        self.page.wait_for_timeout(5000)
-                        continue
-
-                    # 4. Detect the next step (Flow A, B, or C)
-                    print("    - Detecting next step...")
-                    password_selectors = ["input[name='password']", "input[type='password']", 'input[data-testid="LoginForm_Password_Input"]']
-                    username_verify_selector = 'input[data-testid="ocfEnterTextTextInput"]'
-                    
-                    target_found = None
-                    for _ in range(15): # 15s timeout
-                        if any(self.page.is_visible(s) for s in password_selectors):
-                            target_found = "PASSWORD"
-                            break
-                        if self.page.is_visible(username_verify_selector):
-                            target_found = "USERNAME"
-                            break
-                        if self.page.is_visible('text="Verify your identity"') or self.page.is_visible('text="security code"'):
-                            target_found = "SECURITY"
-                            break
-                        
-                        if not self.page.is_visible('div[role="dialog"]'):
-                            print("      - ⚠️ Modal closed during detection.")
-                            break
-                        self.page.wait_for_timeout(1000)
-                    
-                    if not target_found:
-                        print("    - 🔄 Recovery: Reloading flow for retry...")
-                        self.page.goto("https://x.com/i/flow/login", wait_until="domcontentloaded")
-                        self.page.wait_for_timeout(5000)
-                        continue # Try the sub-loop again
-
-                    if target_found == "USERNAME":
-                        print("    - 👤 FLOW B: Username Confirmation")
-                        username_val = TWITTER_USERNAME or TWITTER_EMAIL.split('@')[0]
-                        self.page.fill(username_verify_selector, username_val)
-                        self.page.keyboard.press("Enter")
-                        self.page.wait_for_timeout(3000)
-                    elif target_found == "SECURITY":
-                        print("    - 🛡️ FLOW C: Security Check")
-                        self.page.screenshot(path="login_security_check.png")
-                        raise Exception("Security Verification required.")
-
-                    # 5. Enter password
-                    print("    - Entering password...")
-                    active_pw_sel = None
-                    for _ in range(10): 
-                        for s in password_selectors:
-                            if self.page.is_visible(s):
-                                active_pw_sel = s
-                                break
-                        if active_pw_sel: break
-                        self.page.wait_for_timeout(1000)
-                    
-                    if not active_pw_sel:
-                        print("    - ⚠️ Password field missed. Retrying sub-flow...")
-                        continue
-                    
-                    self.page.fill(active_pw_sel, TWITTER_PASSWORD)
-                    self.page.keyboard.press("Enter")
-                    
-                    # 6. Verify Timeline
-                    print("    - Verifying timeline...")
-                    try:
-                        self.page.wait_for_selector('div[data-testid="primaryColumn"]', timeout=30000)
-                        print("✅ Login successful!")
-                        return True
-                    except:
-                        print("    - ⚠️ Timeline not reached.")
-                
-                raise Exception("Exhausted sub-attempts for this login attempt.")
-                
-            except Exception as e:
-                print(f"❌ Login Attempt {attempt+1} failed: {e}")
-                self.page.screenshot(path=f"login_fail_attempt_{attempt+1}.png")
-                time.sleep(5)
-        return False
+        else:
+            print("❌ Not logged in to Twitter/X")
+            print("⚠️  Please log in manually in Chrome first:")
+            print("   1. Open Chrome browser")
+            print("   2. Go to https://twitter.com")
+            print("   3. Log in with your credentials")
+            print("   4. Close Chrome")
+            print("   5. Run this script again")
+            return False
 
     def generate_tweet(self):
         """Step 3: Generate AI Content"""
@@ -286,51 +126,128 @@ class TwitterAutonomousAgent:
             "The era of AI automation is here. Digital employees aren't just tools; they are teammates that handle routine tasks so humans can focus on creativity. #AI #Innovation #DigitalFTE",
             "Scaling a business is easier with AI automation. Imagine a workforce that never sleeps and always executes with precision. That's the power of Digital FTEs. #Automation #BusinessGrowth #AI"
         ]
-        return random.choice(tweets)
+        tweet = random.choice(tweets)
+        # Add Timestamp to start for absolute uniqueness
+        timestamp_str = datetime.now().strftime("%H:%M:%S")
+        tweet = f"[{timestamp_str}] {tweet}"
+        
+        # Append unique ID as well for double safety
+        unique_id = f" [ID:{random.randint(1000, 9999)}]"
+        limit = 250 - len(unique_id)
+        if len(tweet) > limit:
+            tweet = tweet[:limit-3] + "..."
+        return tweet + unique_id
 
-    def create_post(self, content):
-        """Step 4 & 5: Create and Publish Post"""
+    def create_post(self, content, dry_run=False):
+        """Step 4 & 5: Create and Publish Post with anti-detection"""
         print(f"📝 Posting tweet: {content[:50]}...")
-        
-        post_selectors = [
-            'div[data-testid="SideNav_NewTweet_Button"]',
-            'a[data-testid="SideNav_NewTweet_Button"]',
-            'div[aria-label="Post"]',
-            'a[aria-label="Post"]'
-        ]
-        
+
         for i in range(3):
             print(f"  - Post attempt {i+1}/3...")
             try:
-                if "home" not in self.page.url:
-                    self.page.goto("https://x.com/home", wait_until="domcontentloaded")
-                    self.page.wait_for_selector('div[data-testid="primaryColumn"]', timeout=20000)
+                # Anti-detection: random delays and mouse movements
+                self._random_mouse_move()
+                self._random_delay(8000, 15000)
 
-                clicked = False
-                for selector in post_selectors:
-                    if self.page.is_visible(selector):
-                        self.page.click(selector)
-                        clicked = True
-                        break
+                # Ensure we're on home
+                if "home" not in self.page.url.lower():
+                    print("      - Navigating to home page...")
+                    self.page.goto("https://twitter.com/home", wait_until="load", timeout=60000)
                 
-                if not clicked:
+                time.sleep(3)
+                
+                # --- Overlay Handling ---
+                try:
+                    self.page.evaluate("() => { document.querySelectorAll('[data-testid=\"twc-cc-mask\"], .css-175oi2r.r-1pi2tsx').forEach(m => m.style.display = 'none'); }")
+                except: pass
+
+                # Open Modal
+                try:
+                    sidebar_btn = self.page.locator('[data-testid="SideNav_NewTweet_Button"]:visible').first
+                    sidebar_btn.click()
+                    print("      - Sidebar Post button clicked.")
+                except:
+                    print("      ⚠️ Sidebar button not found, using keyboard 'n'...")
                     self.page.keyboard.press("n")
+
+                time.sleep(2)
+
+                # TARGET TEXTAREA
+                print("      - Filling tweet content in modal...")
+                tweet_input = self.page.locator('div[data-testid="tweetTextarea_0"]:visible, div[role="textbox"]:visible').first
+                tweet_input.wait_for(state="visible", timeout=30000)
                 
-                self.page.wait_for_timeout(3000)
-                self.page.wait_for_selector('div[data-testid="tweetTextarea_0"]', timeout=15000)
-                self.page.fill('div[data-testid="tweetTextarea_0"]', content)
-                self.page.wait_for_timeout(2000)
+                # --- FORCE FOCUS ---
+                tweet_input.scroll_into_view_if_needed()
+                tweet_input.click()
+                time.sleep(0.5)
+                tweet_input.fill("")
+                time.sleep(0.5)
                 
-                publish_selector = 'div[data-testid="tweetButtonInline"]'
-                if not self.page.is_visible(publish_selector):
-                    publish_selector = 'button[data-testid="tweetButton"]'
+                # Human-like interaction
+                for char in content:
+                    self.page.keyboard.type(char, delay=random.randint(10, 30))
                 
-                self.page.click(publish_selector)
+                time.sleep(0.8)
+                self.page.keyboard.press("Space")
+                self.page.keyboard.press("Backspace")
+                time.sleep(1)
+
+                if dry_run:
+                    print("🧪 DRY RUN - Not actually posting")
+                    return True
+
+                # Wait for button
+                publish_selector = '[data-testid="tweetButton"]:visible:not([aria-disabled="true"])'
                 
-                # Check for success on timeline
-                time.sleep(5)
-                print("✅ Tweet published successfully!")
-                return True
+                posted = False
+                try:
+                    self.page.wait_for_selector(publish_selector, timeout=30000)
+                    print("✅ Post button is now enabled!")
+                    
+                    # Click Post
+                    button = self.page.locator('[data-testid="tweetButton"]:visible').first
+                    box = button.bounding_box()
+                    if box:
+                        self.page.mouse.click(box["x"] + box["width"]/2, box["y"] + box["height"]/2)
+                    else:
+                        button.click()
+                        
+                    # Verify closure
+                    self.page.wait_for_selector('div[data-testid="tweetTextarea_0"]', state="detached", timeout=12000)
+                    print("✅ Tweet posted successfully!")
+                    posted = True
+                except:
+                    print("⚠️ Modal still open, re-focusing and trying Keyboard Fallback...")
+                    
+                    # --- CRITICAL RE-FOCUS ---
+                    try:
+                        box = tweet_input.bounding_box()
+                        if box:
+                            self.page.mouse.click(box["x"] + box["width"]/2, box["y"] + box["height"]/4)
+                    except:
+                        tweet_input.focus()
+                    
+                    time.sleep(0.5)
+                    self.page.keyboard.press("Control+Enter")
+                    try:
+                        self.page.wait_for_selector('div[data-testid="tweetTextarea_0"]', state="detached", timeout=12000)
+                        print("✅ Tweet posted via keyboard fallback!")
+                        posted = True
+                    except:
+                        print("❌ Still failed — possibly blocked or focus issues")
+                        posted = False
+
+                # 🔥 FINAL STATUS OUTPUT
+                print("\n" + "="*70)
+                if posted:
+                    print("✅ FULLY POSTED")
+                    print("="*70)
+                    return True
+                else:
+                    print("❌ POSTING FAILED")
+                    print("="*70)
+                    continue
             except Exception as e:
                 print(f"    ❌ Attempt {i+1} failed: {str(e)}")
                 time.sleep(5)
@@ -365,67 +282,59 @@ class TwitterAutonomousAgent:
         except Exception as e:
             print(f"❌ Logging failed: {str(e)}")
 
-    def logout_and_close(self):
-        """Step 10: Logout & Cleanup"""
-        print("🔒 Logging out safely...")
+    def close_browser(self):
+        """Step 10: Close browser (keep session for next time)"""
+        print("🔒 Closing browser (session preserved)...")
         try:
-            if not self.page: return
-            
-            # Click Account Switcher
-            switcher = self.page.locator('div[data-testid="SideNav_AccountSwitcher_Button"]')
-            if switcher.count() > 0:
-                switcher.click()
-                self.page.wait_for_timeout(2000)
-                
-                # Click Logout option
-                logout_btns = [
-                    'a[data-testid="AccountSwitcher_Logout_Button"]',
-                    'a:has-text("Log out")',
-                    '//span[text()="Log out"]/ancestor::a'
-                ]
-                
-                for sel in logout_btns:
-                    btn = self.page.locator(sel)
-                    if btn.count() > 0:
-                        btn.click()
-                        confirm = self.page.locator('button[data-testid="confirmationSheetConfirm"]')
-                        if confirm.count() > 0:
-                            confirm.click()
-                            print("✅ Logged out.")
-                        break
+            if self.context:
+                self.context.close()
+            if self.playwright:
+                self.playwright.stop()
+            print("👋 Browser closed.")
         except Exception as e:
-            print(f"⚠️ Logout skipped: {e}")
-        
-        try:
-            if self.context: self.context.close()
-            if self.playwright: self.playwright.stop()
-            print("👋 Session closed.")
-        except: pass
+            print(f"⚠️ Close error: {e}")
 
 def main():
+    """Main execution function"""
     agent = TwitterAutonomousAgent(headless=False)
     try:
-        if not (TWITTER_EMAIL and TWITTER_PASSWORD):
-            print("❌ Error: TWITTER_EMAIL and TWITTER_PASSWORD must be in .env")
-            return
+        print("=" * 60)
+        print("Twitter Autonomous Agent - Chrome Profile Edition")
+        print("=" * 60)
+        print()
+
+        # Start browser
         if not agent.start_browser():
+            print("❌ Failed to start browser")
             return
 
-        if not agent.is_logged_in():
-            if not agent.login():
-                print("❌ Final diagnosis: Login failed after all retries.")
-                return
+        # Check login (no auto-login)
+        if not agent.check_login():
+            print("❌ Not logged in - please log in manually first")
+            return
 
+        # Generate tweet
         tweet_text = agent.generate_tweet()
-        if agent.post_tweet(tweet_text):
-            agent.log_to_vault(f"Tweet Posted: {tweet_text}")
+        print(f"\n📝 Generated tweet: {tweet_text}\n")
+
+        # Post tweet
+        if agent.create_post(tweet_text):
+            # Capture URL
+            tweet_url = agent.capture_url()
+
+            # Save log
+            agent.save_log(tweet_text, tweet_url)
+
+            print("\n" + "=" * 60)
             print("🚀 Task Completed Successfully")
+            print("=" * 60)
         else:
-            print("❌ Failed to post tweet.")
+            print("❌ Failed to post tweet")
+
     except Exception as e:
-        print(f"💥 Fatal script error: {e}")
+        print(f"💥 Fatal error: {e}")
     finally:
-        agent.logout_and_close()
+        agent.close_browser()
 
 if __name__ == "__main__":
     main()

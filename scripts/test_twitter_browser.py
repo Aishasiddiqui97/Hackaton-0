@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Test script for Twitter Browser Automation
-Verifies browser automation setup and credentials
+Test script for Twitter Browser Automation - Chrome Profile Edition
+Verifies browser automation setup with real Chrome profile
 """
 
 import os
@@ -18,22 +18,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def test_browser_initialization():
-    """Test browser can be initialized."""
+    """Test browser can be initialized with Chrome profile."""
     print("Testing browser initialization...")
 
-    email = os.getenv('TWITTER_EMAIL')
-    password = os.getenv('TWITTER_PASSWORD')
-
-    if not email or not password:
-        print("[FAIL] Twitter credentials not found in .env")
-        print("   Add TWITTER_EMAIL and TWITTER_PASSWORD to .env file")
-        return False
-
-    agent = TwitterBrowserAgent(email, password)
+    agent = TwitterBrowserAgent()
 
     try:
         if agent.start_browser():
-            print("[PASS] Browser initialized successfully")
+            print("[PASS] Browser initialized successfully with Chrome profile")
             agent.close_browser()
             return True
         else:
@@ -44,14 +36,36 @@ def test_browser_initialization():
         return False
 
 
+def test_login_check():
+    """Test login status check."""
+    print("\nTesting login status check...")
+
+    agent = TwitterBrowserAgent()
+
+    try:
+        if not agent.start_browser():
+            print("[FAIL] Could not start browser")
+            return False
+
+        if agent.check_login():
+            print("[PASS] Login check successful - you are logged in")
+            agent.close_browser()
+            return True
+        else:
+            print("[FAIL] Not logged in - please log in manually in Chrome first")
+            agent.close_browser()
+            return False
+    except Exception as e:
+        print(f"[FAIL] {str(e)}")
+        agent.close_browser()
+        return False
+
+
 def test_tweet_generation():
     """Test tweet content generation."""
     print("\nTesting tweet generation...")
 
-    email = os.getenv('TWITTER_EMAIL', 'test@example.com')
-    password = os.getenv('TWITTER_PASSWORD', 'test')
-
-    agent = TwitterBrowserAgent(email, password)
+    agent = TwitterBrowserAgent()
 
     try:
         tweet = agent.generate_tweet()
@@ -73,9 +87,9 @@ def test_vault_structure():
     print("\nTesting vault structure...")
 
     required_paths = [
-        Path("AI_Employee_Vault/Agents"),
-        Path("AI_Employee_Vault/Plans"),
-        Path("AI_Employee_Vault/Logs")
+        Path("AI_Employee_Vault/twitter"),
+        Path("AI_Employee_Vault/Logs"),
+        Path("AI_Employee_Vault/Signals")
     ]
 
     all_exist = True
@@ -100,8 +114,8 @@ def test_log_file():
             print(f"[PASS] Log file exists at {log_file}")
             return True
         else:
-            print(f"[FAIL] Log file not found at {log_file}")
-            return False
+            print(f"[INFO] Log file will be created on first post")
+            return True
     except Exception as e:
         print(f"❌ FAIL: {str(e)}")
         return False
@@ -122,18 +136,39 @@ def test_playwright_installation():
         return False
 
 
+def test_chrome_profile():
+    """Test Chrome profile path exists."""
+    print("\nTesting Chrome profile...")
+
+    chrome_data_dir = os.getenv("CHROME_USER_DATA_DIR", r"C:\Users\hp\AppData\Local\Google\Chrome\User Data")
+    chrome_profile = os.getenv("CHROME_PROFILE", "Default")
+
+    profile_path = Path(chrome_data_dir) / chrome_profile
+
+    if profile_path.exists():
+        print(f"[PASS] Chrome profile exists at {profile_path}")
+        return True
+    else:
+        print(f"[FAIL] Chrome profile not found at {profile_path}")
+        print("   Check CHROME_USER_DATA_DIR in .env")
+        return False
+
+
 def main():
     """Run all tests."""
     print("=" * 60)
     print("  Twitter Browser Automation - Test Suite")
+    print("  Chrome Profile Edition")
     print("=" * 60)
 
     tests = [
         ("Playwright Installation", test_playwright_installation),
+        ("Chrome Profile Path", test_chrome_profile),
         ("Vault Structure", test_vault_structure),
         ("Log File", test_log_file),
         ("Tweet Generation", test_tweet_generation),
-        ("Browser Initialization", test_browser_initialization)
+        ("Browser Initialization", test_browser_initialization),
+        ("Login Status Check", test_login_check)
     ]
 
     results = []
@@ -162,11 +197,16 @@ def main():
     if passed == total:
         print("\n[SUCCESS] Twitter browser automation is ready.")
         print("\nNext steps:")
-        print("1. Add Twitter credentials to .env file")
-        print("2. Run: python scripts/test_twitter_post.py")
-        print("3. Create task in Inbox to trigger posting")
+        print("1. Make sure you're logged into Twitter in Chrome")
+        print("2. Run: python test_twitter_session.py")
+        print("3. Run: python test_twitter_dry_run.py")
+        print("4. Test real posting with: python playwright_twitter.py --dry-run")
     else:
         print("\n[WARNING] Some tests failed. Please fix issues before proceeding.")
+        print("\nCommon fixes:")
+        print("- If 'Login Status Check' failed: Log into Twitter manually in Chrome")
+        print("- If 'Chrome Profile Path' failed: Update CHROME_USER_DATA_DIR in .env")
+        print("- If 'Playwright Installation' failed: Run 'pip install playwright && playwright install chromium'")
 
     return passed == total
 
